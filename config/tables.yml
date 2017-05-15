@@ -1,0 +1,3 @@
+parameters:
+    spaceace.ajaxchat.chat_table: '%core.table_prefix%ajax_chat'
+    spaceace.ajaxchat.chat_session_table: '%core.table_prefix%ajax_chat_sessions'

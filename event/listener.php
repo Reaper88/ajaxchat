@@ -71,9 +71,6 @@ class listener implements EventSubscriberInterface
 	/** @var core.php_ext */
 	protected $php_ext;
 
-	/** @var string */
-	protected $table_prefix;
-
 	/** @var int */
 	protected $default_delay = 15;
 
@@ -138,7 +135,6 @@ class listener implements EventSubscriberInterface
 	 * @param manager		$ext_manager
 	 * @param path_helper	$path_helper
 	 * @param Container		$container
-	 * @param string		$table_prefix
 	 * @param string		$root_path
 	 * @param string		$php_ext
 	 */
@@ -318,14 +314,7 @@ class listener implements EventSubscriberInterface
 			'offline'	 => $this->config['status_offline_chat'],
 		];
 
-		$sql = 'SELECT c.*, p.post_visibility, u.user_avatar, u.user_avatar_type, u.user_avatar_width, u.user_avatar_height
-			FROM ' . $this->chat_table . ' as c
-			LEFT JOIN ' . USERS_TABLE . ' as u ON c.user_id = u.user_id
-			LEFT JOIN ' . POSTS_TABLE . ' as p ON c.post_id = p.post_id
-			WHERE c.message_id > ' . (int) $this->last_id . '
-			ORDER BY c.message_id DESC';
-		$result	= $this->db->sql_query_limit($sql, (int) $this->config['ajax_chat_index_amount']);
-		$rows	= $this->db->sql_fetchrowset($result);
+		$rows = $this->chat->get_chats('');
 
 		if (!sizeof($rows) && ((time() - 60) < $this->last_time))
 		{
@@ -349,21 +338,6 @@ class listener implements EventSubscriberInterface
 				continue;
 			}
 
-			$avatar	= [
-				'avatar'		 => $row['user_avatar'],
-				'avatar_type'	 => $row['user_avatar_type'],
-				'avatar_height'	 => $row['user_avatar_height'],
-				'avatar_width'	 => $row['user_avatar_width'],
-			];
-			$avatar_thumb = [
-				'avatar'		 => $row['user_avatar'],
-				'avatar_type'	 => $row['user_avatar_type'],
-				'avatar_height'	 => 20,
-				'avatar_width'	 => '',
-			];
-			$row['avatar']		 = ($this->user->optionget('viewavatars')) ? phpbb_get_avatar($avatar, '') : '';
-			$row['avatar_thumb'] = ($this->user->optionget('viewavatars')) ? phpbb_get_avatar($avatar_thumb, '') : '';
-
 			if ($this->count++ == 0)
 			{
 				$this->last_id = $row['message_id'];
@@ -386,8 +360,8 @@ class listener implements EventSubscriberInterface
 				'MESSAGE'			 => generate_text_for_display($row['message'], $row['bbcode_uid'], $row['bbcode_bitfield'], $row['bbcode_options']),
 				'TIME'				 => $this->user->format_date($row['time'], $time),
 				'CLASS'				 => ($row['message_id'] % 2) ? 1 : 2,
-				'USER_AVATAR'		 => $row['avatar'],
-				'USER_AVATAR_THUMB'	 => $row['avatar_thumb'],
+				'USER_AVATAR'		 => $this->chat->get_avatar($row),
+				'USER_AVATAR_THUMB'	 => $this->chat->get_avatar($row, true),
 				'S_AJAXCHAT_EDIT'	 => $this->chat->can_edit_message($row['user_id']),
 				'U_EDIT'			 => $this->helper->route('spaceace_ajaxchat_edit', array('chat_id' => $row['message_id'])),
 			]);
@@ -395,41 +369,7 @@ class listener implements EventSubscriberInterface
 
 		$this->db->sql_freeresult($result);
 
-		if ($this->user->data['user_type'] == USER_FOUNDER || $this->user->data['user_type'] == USER_NORMAL)
-		{
-			$sql	 = 'SELECT *
-				FROM ' . $this->chat_session_table . '
-				WHERE user_id = ' . (int) $this->user->data['user_id'];
-			$result	 = $this->db->sql_query($sql);
-			$row	 = $this->db->sql_fetchrow($result);
-			$this->db->sql_freeresult($result);
-
-			if ($row['user_id'] != $this->user->data['user_id'])
-			{
-				$sql_ary = [
-					'user_id'			 => $this->user->data['user_id'],
-					'username'			 => $this->user->data['username'],
-					'user_colour'		 => $this->user->data['user_colour'],
-					'user_login'		 => time(),
-					'user_lastupdate'	 => time(),
-				];
-				$sql = 'INSERT INTO ' . $this->chat_session_table . ' ' . $this->db->sql_build_array('INSERT', $sql_ary);
-				$this->db->sql_query($sql);
-			}
-			else
-			{
-				$sql_ary = [
-					'username'			 => $this->user->data['username'],
-					'user_colour'		 => $this->user->data['user_colour'],
-					'user_login'		 => time(),
-					'user_lastupdate'	 => time(),
-				];
-				$sql	 = 'UPDATE ' . $this->chat_session_table . '
-					SET ' . $this->db->sql_build_array('UPDATE', $sql_ary) . '
-					WHERE user_id = ' . (int) $this->user->data['user_id'];
-				$this->db->sql_query($sql);
-			}
-		}
+		$this->chat->update_chat_session();
 		$this->chat->index();
 	}
 

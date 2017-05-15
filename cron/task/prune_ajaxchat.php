@@ -20,7 +20,7 @@ class prune_ajaxchat extends \phpbb\cron\task\base
 	protected $user;
 	protected $db;
 	protected $phpbb_log;
-	protected $table_prefix;
+	protected $chat_table;
 
 	/**
 	 * Constructor.
@@ -30,13 +30,13 @@ class prune_ajaxchat extends \phpbb\cron\task\base
 	 * @param phpbb_config $config The config
 	 * @param phpbb_db_driver $db The db connection
 	 */
-	public function __construct(\phpbb\config\config $config, \phpbb\db\driver\driver_interface $db, \phpbb\user $user, \phpbb\log\log $phpbb_log, $table_prefix)
+	public function __construct(\phpbb\config\config $config, \phpbb\db\driver\driver_interface $db, \phpbb\user $user, \phpbb\log\log $phpbb_log, $chat_table)
 	{
 		$this->config = $config;
 		$this->db = $db;
 		$this->user = $user;
 		$this->phpbb_log = $phpbb_log;
-		$this->table_prefix	 = $table_prefix;
+		$this->chat_table	 = $chat_table;
 	}
 
 	/**
@@ -46,18 +46,13 @@ class prune_ajaxchat extends \phpbb\cron\task\base
 	 */
 	public function run()
 	{
-		if (!defined('CHAT_TABLE'))
-		{
-			$chat_table = $this->table_prefix . 'ajax_chat';
-			define('CHAT_TABLE', $chat_table);
-		}
 		$sql  = 'SELECT message_id
-			FROM ' . CHAT_TABLE . '
+			FROM ' . $this->chat_table . '
 			ORDER BY message_id DESC ';
 		$result  = $this->db->sql_query_limit($sql, 1, $this->config['prune_keep_ajax_chat']);
 		$row  = $this->db->sql_fetchfield('message_id');
 		$this->db->sql_freeresult($result);
-		$sql1 = 'DELETE FROM ' . CHAT_TABLE . '
+		$sql1 = 'DELETE FROM ' . $this->chat_table . '
 			WHERE message_id <= ' . (int) $row;
 		$this->db->sql_query($sql1);
 		// Add the log to the ACP.
